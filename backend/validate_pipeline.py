@@ -1,12 +1,17 @@
 """
-LipSync — Phase 1 Pipeline Validation Script
+LipSync — Pipeline Validation Script (Phase 1 + Phase 2)
 
-Runs end-to-end checks on the data pipeline to verify:
+Runs end-to-end checks on the full pipeline to verify:
 1. Face Mesh processor initialises correctly
 2. Lip ROI extraction produces correct output shapes
 3. Alignment parsing works
-4. Data loader outputs correct shapes and label alignment
+4. Text encoding/decoding round-trip
 5. Model architecture builds with the expected input/output shapes
+6. Data loader outputs correct shapes and label alignment
+7. WER/CER metric implementations
+8. Evaluation module imports and works
+9. Optimization module (small model variant, TFLite)
+10. Predictor module imports
 
 Usage:
     python -m backend.validate_pipeline
@@ -41,7 +46,7 @@ def check(name: str, passed: bool, detail: str = ""):
 
 def main():
     logger.info("=" * 60)
-    logger.info("LipSync — Phase 1 Pipeline Validation")
+    logger.info("LipSync — Pipeline Validation (Phase 1 + Phase 2)")
     logger.info("=" * 60)
 
     project_root = Path(__file__).parent.parent
@@ -269,6 +274,91 @@ def main():
         logger.info(f"  {SKIP} Skipped — no processed data found at {processed_dir}")
 
     # ------------------------------------------------------------------
+    # 7. Phase 2: WER/CER Metrics
+    # ------------------------------------------------------------------
+    logger.info("\n7. WER / CER Metrics")
+    try:
+        from backend.model.train import compute_wer, compute_cer, decode_label
+
+        # Test WER
+        wer_perfect = compute_wer("bin blue at f two now", "bin blue at f two now")
+        check("WER perfect match = 0.0", wer_perfect == 0.0, f"{wer_perfect}")
+
+        wer_one_wrong = compute_wer("bin blue at f two now", "bin red at f two now")
+        check("WER 1/6 words wrong ≈ 0.167", abs(wer_one_wrong - 1 / 6) < 0.01,
+              f"{wer_one_wrong:.4f}")
+
+        # Test CER
+        cer_perfect = compute_cer("hello", "hello")
+        check("CER perfect match = 0.0", cer_perfect == 0.0, f"{cer_perfect}")
+
+        cer_one_wrong = compute_cer("abc", "axc")
+        check("CER 1/3 chars wrong ≈ 0.333", abs(cer_one_wrong - 1 / 3) < 0.01,
+              f"{cer_one_wrong:.4f}")
+
+        # Test decode_label round-trip
+        from backend.model.train import encode_text
+        test_text = "bin blue at f two now"
+        encoded = encode_text(test_text)
+        decoded = decode_label(encoded)
+        check("encode→decode_label round-trip", decoded == test_text, f"'{decoded}'")
+
+    except Exception as e:
+        check("WER/CER metrics", False, str(e))
+
+    # ------------------------------------------------------------------
+    # 8. Phase 2: Evaluation Module
+    # ------------------------------------------------------------------
+    logger.info("\n8. Evaluation Module")
+    try:
+        from backend.model.evaluate import ModelEvaluator, plot_training_history
+        check("Evaluation module imports", True)
+    except Exception as e:
+        check("Evaluation module imports", False, str(e))
+
+    # ------------------------------------------------------------------
+    # 9. Phase 2: Optimization Module
+    # ------------------------------------------------------------------
+    logger.info("\n9. Optimization Module")
+    try:
+        from backend.model.optimize import (
+            profile_model,
+            convert_to_tflite,
+            build_small_model,
+            TFLitePredictor,
+        )
+        check("Optimization module imports", True)
+
+        # Build small model
+        small = build_small_model()
+        check(
+            "Small model builds",
+            small.count_params() < model.count_params(),
+            f"{small.count_params():,} < {model.count_params():,} params",
+        )
+
+        # Quick inference on small model
+        dummy_sm = np.random.rand(1, 75, 50, 100, 1).astype(np.float32)
+        pred_sm = small.predict(dummy_sm, verbose=0)
+        check(
+            "Small model forward pass",
+            pred_sm.shape[0] == 1 and pred_sm.shape[-1] > 1,
+            f"output shape: {pred_sm.shape}",
+        )
+    except Exception as e:
+        check("Optimization module", False, str(e))
+
+    # ------------------------------------------------------------------
+    # 10. Phase 2: Predictor Module
+    # ------------------------------------------------------------------
+    logger.info("\n10. Predictor Module")
+    try:
+        from backend.model.predict import LipReadingPredictor
+        check("Predictor module imports", True)
+    except Exception as e:
+        check("Predictor module imports", False, str(e))
+
+    # ------------------------------------------------------------------
     # Summary
     # ------------------------------------------------------------------
     logger.info("\n" + "=" * 60)
@@ -277,7 +367,7 @@ def main():
     logger.info(f"Results: {passed}/{total} checks passed")
 
     if passed == total:
-        logger.info(f"\n{PASS} All Phase 1 pipeline checks passed!")
+        logger.info(f"\n{PASS} All pipeline checks passed (Phase 1 + Phase 2)!")
     else:
         failed = [name for name, p in results if not p]
         logger.info(f"\n{FAIL} Failed checks:")

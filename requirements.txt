@@ -1,9 +1,10 @@
 ## LipSync — Python Dependencies
 ## Phase 1: Foundation & Data Pipeline
+## Phase 2: Lip Reading Model Training
 
 # Deep Learning
-tensorflow>=2.15.0,<2.17.0
-tensorflow-io>=0.36.0
+tensorflow>=2.15.0
+# tensorflow-io>=0.36.0  # Optional — only needed for specific I/O formats
 
 # Computer Vision & Face Mesh
 mediapipe>=0.10.9
@@ -32,3 +33,5 @@ ipykernel>=6.29.0
 # Testing
 pytest>=8.0.0
 
+# Phase 2: Evaluation & Metrics (no extra deps — WER/CER implemented natively)
+# Phase 2: Model Optimization (TFLite is built into tensorflow)
