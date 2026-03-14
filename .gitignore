@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+venv/
+.venv/
+
+# Data (large files — not tracked in git)
+backend/data/raw/
+backend/data/processed/
+backend/data/alignments/
+backend/data/archives/
+
+# Model weights & assets
+backend/model/lip_model.h5
+backend/model/lip_model.onnx
+backend/model/face_landmarker.task
+backend/model/logs/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
