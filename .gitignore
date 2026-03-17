@@ -17,9 +17,15 @@ backend/data/archives/
 
 # Model weights & assets
 backend/model/lip_model.h5
+backend/model/lip_model.tflite
+backend/model/lip_model_quantized.tflite
+backend/model/lip_model_small_config.json
 backend/model/lip_model.onnx
 backend/model/face_landmarker.task
 backend/model/logs/
+backend/model/training_history.npz
+backend/model/eval_results/
+backend/model/benchmark_results.json
 
 # Node
 frontend/node_modules/
