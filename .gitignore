@@ -30,6 +30,12 @@ backend/model/logs/
 backend/model/training_history.npz
 backend/model/eval_results/
 backend/model/benchmark_results.json
+*.pth
+*.h5
+*.tflite
+*.onnx
+*.npz
+*.task
 
 # Node
 node_modules/
