@@ -8,6 +8,10 @@ build/
 *.egg
 venv/
 .venv/
+.pytest_cache/
+.mypy_cache/
+*.log
+*.pot
 
 # Data (large files — not tracked in git)
 backend/data/raw/
@@ -28,8 +32,13 @@ backend/model/eval_results/
 backend/model/benchmark_results.json
 
 # Node
+node_modules/
 frontend/node_modules/
-frontend/dist/
+web/node_modules/
+.next/
+.vercel/
+dist/
+build/
 
 # IDE
 .vscode/
@@ -37,8 +46,22 @@ frontend/dist/
 
 # OS
 .DS_Store
+.DS_Store.bak
 Thumbs.db
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Editor temp files
+*.swp
+*.swo
+*~
 
