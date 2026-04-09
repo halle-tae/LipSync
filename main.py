@@ -12,9 +12,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 
 def _print_banner():
     print()
-    print("╔══════════════════════════════════════════════╗")
-    print("║  LipSync — Real-Time Lip Reading Assistant   ║")
-    print("╚══════════════════════════════════════════════╝")
+    print("=" * 50)
+    print("  LipSync - Real-Time Lip Reading Assistant")
+    print("=" * 50)
     print()
 
 
@@ -42,17 +42,17 @@ def _run_video_mode(args, logger):
     result = pipeline.predict_from_file(str(video_path))
 
     print()
-    print("─" * 50)
+    print("-" * 50)
     if "error" in result:
         print(f"  Error: {result['error']}")
     else:
-        print(f"  📝 Prediction: \"{result['text']}\"")
-        print(f"  ⏱  Latency:    {result['latency_ms']:.0f}ms")
-        print(f"  🎞  Frames:     {result['num_frames']}")
+        print(f"  Prediction: \"{result['text']}\"")
+        print(f"  Latency:    {result['latency_ms']:.0f}ms")
+        print(f"  Frames:     {result['num_frames']}")
         if result["num_frames"] > 0:
             fps = result["num_frames"] / (result["latency_ms"] / 1000)
-            print(f"  📊 Speed:      {fps:.1f} frames/sec")
-    print("─" * 50)
+            print(f"  Speed:      {fps:.1f} frames/sec")
+    print("-" * 50)
     print()
 
     pipeline.unload()

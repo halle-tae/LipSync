@@ -26,7 +26,7 @@ AUTOAVSR_DIR = PROJECT_ROOT / "auto_avsr"
 
 # Model weight configurations
 # Using the best VSR model: vsr_trlrs2lrs3vox2avsp_base.pth (20.3% WER)
-# Fallback: vsr_trlrs3vox2_base.pth (24.6% WER) — smaller download
+# Fallback: vsr_trlrs3vox2_base.pth (24.6% WER) - smaller download
 MODELS = {
     "vsr_trlrs2lrs3vox2avsp_base": {
         "gdrive_id": "1r1kx7l9sWnDOCnaFHIGvOtzuhFyFA88_",
@@ -46,7 +46,7 @@ MODELS = {
         "gdrive_id": "12PNM5szUsk_CuaV1yB9dL_YWvSM1zvAd",
         "filename": "vsr_trlrs3_base.pth",
         "md5_prefix": "c00a7",
-        "description": "Base VSR model (36.0% WER, trained on LRS3 only — smallest download)",
+        "description": "Base VSR model (36.0% WER, trained on LRS3 only - smallest download)",
         "url": "http://www.doc.ic.ac.uk/~pm4115/autoAVSR/vsr_trlrs3_base.pth",
     },
 }
@@ -73,17 +73,17 @@ def print_step(step: int, text: str):
 
 def print_ok(text: str):
     """Print a success message."""
-    print(f"  ✓ {text}")
+    print(f"  [OK] {text}")
 
 
 def print_warn(text: str):
     """Print a warning message."""
-    print(f"  ⚠ {text}")
+    print(f"  [WARN] {text}")
 
 
 def print_error(text: str):
     """Print an error message."""
-    print(f"  ✗ {text}")
+    print(f"  [ERROR] {text}")
 
 
 def verify_python_version():
@@ -93,7 +93,7 @@ def verify_python_version():
         print_ok(f"Python {version.major}.{version.minor}.{version.micro}")
         return True
     else:
-        print_error(f"Python {version.major}.{version.minor}.{version.micro} — need 3.10+")
+        print_error(f"Python {version.major}.{version.minor}.{version.micro} - need 3.10+")
         return False
 
 
@@ -106,16 +106,16 @@ def verify_torch():
 
         if torch.cuda.is_available():
             gpu_name = torch.cuda.get_device_name(0)
-            print_ok(f"CUDA available — {gpu_name}")
+            print_ok(f"CUDA available - {gpu_name}")
             print_ok(f"CUDA version: {torch.version.cuda}")
         elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-            print_ok("Apple MPS (Metal) available — GPU acceleration enabled")
+            print_ok("Apple MPS (Metal) available - GPU acceleration enabled")
         else:
-            print_warn("No GPU detected — inference will run on CPU (slower)")
+            print_warn("No GPU detected - inference will run on CPU (slower)")
 
         return True
     except ImportError:
-        print_error("PyTorch not installed — run: pip install -r requirements.txt")
+        print_error("PyTorch not installed - run: pip install -r requirements.txt")
         return False
 
 
@@ -139,7 +139,7 @@ def verify_dependencies():
             __import__(module)
             print_ok(f"{package}")
         except ImportError:
-            print_error(f"{package} not installed — run: pip install {package}")
+            print_error(f"{package} not installed - run: pip install {package}")
             all_ok = False
 
     return all_ok
@@ -167,7 +167,7 @@ def clone_auto_avsr():
         print_error(f"Failed to clone: {e.stderr}")
         return False
     except FileNotFoundError:
-        print_error("git not found — please install git")
+        print_error("git not found - please install git")
         return False
 
 
@@ -207,7 +207,7 @@ def download_weights(model_key: str = DEFAULT_MODEL):
         if md5.startswith(model_info["md5_prefix"]):
             print_ok(f"MD5 checksum verified (starts with {model_info['md5_prefix']})")
         else:
-            print_warn(f"MD5 mismatch — got {md5[:5]}, expected {model_info['md5_prefix']}")
+            print_warn(f"MD5 mismatch - got {md5[:5]}, expected {model_info['md5_prefix']}")
             print_warn("File may be corrupted. Try re-downloading.")
 
         return True
@@ -224,7 +224,7 @@ def download_weights(model_key: str = DEFAULT_MODEL):
         print_ok(f"Downloaded to {weight_path}")
         return True
     except ImportError:
-        print_error("gdown not installed — run: pip install gdown")
+        print_error("gdown not installed - run: pip install gdown")
         return False
     except Exception as e:
         print_error(f"Download failed: {e}")
@@ -286,7 +286,7 @@ def download_demo_video():
 
         writer.release()
         print_ok(f"Created synthetic test video at {DEMO_VIDEO_PATH}")
-        print_warn("Note: This is a synthetic face — predictions will not be meaningful.")
+        print_warn("Note: This is a synthetic face - predictions will not be meaningful.")
         return True
     except Exception as e2:
         print_error(f"Could not create synthetic test video: {e2}")
@@ -309,7 +309,7 @@ def verify_environment():
         print_ok(f"Auto-AVSR repo found at {AUTOAVSR_DIR}")
         results.append(("Auto-AVSR repo", True))
     else:
-        print_warn(f"Auto-AVSR repo not found — run: python scripts/setup.py --clone-repo")
+        print_warn(f"Auto-AVSR repo not found - run: python scripts/setup.py --clone-repo")
         results.append(("Auto-AVSR repo", False))
 
     # Check if weights exist
@@ -318,14 +318,14 @@ def verify_environment():
         print_ok(f"Model weights found: {[f.name for f in weight_files]}")
         results.append(("Model weights", True))
     else:
-        print_warn("No model weights found — run: python scripts/setup.py --download-weights")
+        print_warn("No model weights found - run: python scripts/setup.py --download-weights")
         results.append(("Model weights", False))
 
     # Summary
     print_header("Verification Summary")
     all_ok = True
     for name, ok in results:
-        status = "✓" if ok else "✗"
+        status = "[OK]" if ok else "[FAIL]"
         print(f"  {status} {name}")
         if not ok:
             all_ok = False
@@ -340,7 +340,7 @@ def verify_environment():
 
 def full_setup(model_key: str = DEFAULT_MODEL):
     """Run the complete setup process."""
-    print_header("LipSync — Full Setup")
+    print_header("LipSync - Full Setup")
     print(f"  Project root: {PROJECT_ROOT}")
     print(f"  Model: {MODELS[model_key]['description']}")
 

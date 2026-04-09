@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 # Paths
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-AUTOAVSR_DIR = PROJECT_ROOT / "auto_avsr"
+AUTOAVSR_DIR = PROJECT_ROOT / "auto_avsr" / "auto_avsr"  # Nested structure
 WEIGHTS_DIR = PROJECT_ROOT / "backend" / "model" / "weights"
 
 # Default weight file — best balance of quality and download size

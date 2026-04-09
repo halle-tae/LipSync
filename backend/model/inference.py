@@ -22,6 +22,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
+import av
 import numpy as np
 import torch
 import torchvision
@@ -29,7 +30,7 @@ import torchvision
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-AUTOAVSR_DIR = PROJECT_ROOT / "auto_avsr"
+AUTOAVSR_DIR = PROJECT_ROOT / "auto_avsr" / "auto_avsr"  # Nested structure
 
 
 def _ensure_autoavsr_on_path():
@@ -121,6 +122,19 @@ class InferencePipeline:
         """Check if the pipeline is fully loaded."""
         return self.model_module is not None and self.landmarks_detector is not None
 
+    def _load_video_frames(self, video_path: str) -> np.ndarray:
+        """Load video frames using PyAV.
+
+        Returns:
+            np.ndarray: Video frames as numpy array (T, H, W, 3) in RGB format
+        """
+        container = av.open(video_path)
+        frames = []
+        for frame in container.decode(video=0):
+            frames.append(frame.to_ndarray(format='rgb24'))
+        container.close()
+        return np.array(frames)
+
     def predict_from_file(self, video_path: str) -> dict:
         """
         Run inference on a video file.
@@ -144,9 +158,9 @@ class InferencePipeline:
         timings = {}
         total_start = time.time()
 
-        # Step 1: Load video frames
+        # Step 1: Load video frames using PyAV
         t0 = time.time()
-        video_frames = torchvision.io.read_video(video_path, pts_unit="sec")[0].numpy()
+        video_frames = self._load_video_frames(video_path)
         timings["load_video_ms"] = (time.time() - t0) * 1000
         logger.info(f"Loaded {len(video_frames)} frames from {video_path}")
 
