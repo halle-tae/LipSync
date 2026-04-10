@@ -57,11 +57,11 @@ def print_step(step: int, text: str):
 
 
 def print_ok(text: str):
-    print(f"  ✓ {text}")
+    print(f"  [OK] {text}")
 
 
 def print_error(text: str):
-    print(f"  ✗ {text}")
+    print(f"  [FAIL] {text}")
 
 
 def main():
@@ -192,10 +192,10 @@ def main():
 
     # Summary
     if result["text"]:
-        print_header("✓ Phase 0 inference test PASSED")
+        print_header("Phase 0 inference test PASSED")
         print(f'  Predicted text: "{result["text"]}"\n')
     else:
-        print_header("⚠ Inference produced empty output")
+        print_header("WARNING: Inference produced empty output")
         print("  This may happen if no speech is detected in the video.")
         print("  Try with a different video containing clear frontal speech.\n")
 

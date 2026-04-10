@@ -22,14 +22,14 @@ import time
 from pathlib import Path
 from typing import Optional
 
+import cv2
 import numpy as np
 import torch
-import torchvision
 
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-AUTOAVSR_DIR = PROJECT_ROOT / "auto_avsr"
+AUTOAVSR_DIR = PROJECT_ROOT / "auto_avsr" / "auto_avsr"
 
 
 def _ensure_autoavsr_on_path():
@@ -146,7 +146,15 @@ class InferencePipeline:
 
         # Step 1: Load video frames
         t0 = time.time()
-        video_frames = torchvision.io.read_video(video_path, pts_unit="sec")[0].numpy()
+        cap = cv2.VideoCapture(video_path)
+        frames_list = []
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            frames_list.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        cap.release()
+        video_frames = np.array(frames_list)
         timings["load_video_ms"] = (time.time() - t0) * 1000
         logger.info(f"Loaded {len(video_frames)} frames from {video_path}")
 
@@ -203,6 +211,59 @@ class InferencePipeline:
         logger.info(f"Total latency: {total_ms:.0f}ms")
 
         return result
+
+    def predict_from_numpy_frames(self, frames: np.ndarray) -> dict:
+        """
+        Run the full pipeline on raw RGB frames (no file I/O).
+
+        Args:
+            frames: numpy array of shape [T, H, W, 3] (RGB, uint8)
+
+        Returns:
+            dict with keys: text, confidence, latency_ms, num_frames
+        """
+        if not self.is_loaded():
+            raise RuntimeError("Pipeline not loaded. Call load() first.")
+
+        total_start = time.time()
+
+        # Landmarks detection
+        landmarks = self.landmarks_detector(frames)
+        detected = sum(1 for lm in landmarks if lm is not None)
+        logger.info(f"predict_from_numpy_frames: face in {detected}/{len(frames)} frames")
+
+        if detected == 0:
+            return {
+                "text": "",
+                "confidence": 0.0,
+                "latency_ms": (time.time() - total_start) * 1000,
+                "num_frames": len(frames),
+            }
+
+        # Mouth crop
+        cropped = self.video_process(frames, landmarks)
+        if cropped is None:
+            return {
+                "text": "",
+                "confidence": 0.0,
+                "latency_ms": (time.time() - total_start) * 1000,
+                "num_frames": len(frames),
+            }
+
+        # Preprocess: [T, H, W, C] -> [T, C, H, W] -> VideoTransform -> [T, 1, 88, 88]
+        video_tensor = torch.tensor(cropped).permute(0, 3, 1, 2).float()
+        video_tensor = self.video_transform(video_tensor)
+
+        # Model inference with confidence scoring
+        result = self.predict_from_frames_detailed(video_tensor)
+
+        total_ms = (time.time() - total_start) * 1000
+        return {
+            "text": result["text"],
+            "confidence": result["confidence"],
+            "latency_ms": total_ms,
+            "num_frames": len(frames),
+        }
 
     def predict_from_frames(self, frames_tensor: torch.Tensor) -> dict:
         """

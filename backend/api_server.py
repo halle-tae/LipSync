@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 import base64
+import logging
+import os
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -15,9 +18,11 @@ import re
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -333,6 +338,145 @@ def process_frame(payload: FrameRequest):
         transcript_entry=transcript_entry,
     )
     return response
+
+
+def _deduplicate_captions(captions: List[dict]) -> List[dict]:
+    """Remove overlapping repeated words between adjacent caption chunks."""
+    if len(captions) <= 1:
+        return captions
+
+    result = [captions[0]]
+    for cap in captions[1:]:
+        prev_words = result[-1]["text"].split()
+        cur_words = cap["text"].split()
+        if not prev_words or not cur_words:
+            result.append(cap)
+            continue
+
+        best_overlap = 0
+        max_check = min(len(prev_words), len(cur_words))
+        for k in range(1, max_check + 1):
+            if prev_words[-k:] == cur_words[:k]:
+                best_overlap = k
+
+        if best_overlap > 0:
+            cap = dict(cap)
+            cap["text"] = " ".join(cur_words[best_overlap:])
+        if cap["text"].strip():
+            result.append(cap)
+
+    return result
+
+
+@app.post("/upload/video")
+async def upload_video(file: UploadFile = File(...)):
+    """
+    Accept an MP4 upload, chunk into ~4s segments with 1s overlap,
+    run face detection on every frame and inference on each chunk.
+    Returns per-frame bounding boxes and per-chunk timestamped captions.
+    """
+    runtime.ensure_loaded()
+    total_start = time.time()
+
+    # Save uploaded file to a temp location
+    suffix = Path(file.filename or "video.mp4").suffix or ".mp4"
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    try:
+        contents = await file.read()
+        tmp.write(contents)
+        tmp.flush()
+        tmp.close()
+
+        # Read all frames + FPS
+        cap = cv2.VideoCapture(tmp.name)
+        fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+        all_frames_bgr: List[np.ndarray] = []
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            all_frames_bgr.append(frame)
+        cap.release()
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except OSError:
+            pass
+
+    if not all_frames_bgr:
+        raise HTTPException(status_code=400, detail="Could not read any frames from the uploaded video.")
+
+    total_frames = len(all_frames_bgr)
+    total_duration_ms = int(total_frames / fps * 1000)
+    logger.info(f"Upload: {total_frames} frames, {fps:.1f} fps, {total_duration_ms}ms duration")
+
+    # Per-frame face/mouth bounding boxes
+    extractor = FaceMeshMouthExtractor(roi_size=96)
+    frame_data: List[dict] = []
+    for i, frame_bgr in enumerate(all_frames_bgr):
+        ts_ms = int(i / fps * 1000)
+        detection = extractor.extract(frame_bgr)
+        if detection is not None:
+            frame_data.append({
+                "frame_idx": i,
+                "timestamp_ms": ts_ms,
+                "face_bbox": list(detection.face_bbox),
+                "mouth_bbox": list(detection.mouth_bbox),
+            })
+        else:
+            frame_data.append({
+                "frame_idx": i,
+                "timestamp_ms": ts_ms,
+                "face_bbox": None,
+                "mouth_bbox": None,
+            })
+    extractor.close()
+
+    # Chunk into ~4-second windows with ~3-second stride (1s overlap)
+    chunk_size = int(round(4.0 * fps))
+    stride = int(round(3.0 * fps))
+    if stride < 1:
+        stride = 1
+    if chunk_size < 1:
+        chunk_size = total_frames
+
+    # Build RGB frame array for inference
+    all_frames_rgb = np.array([cv2.cvtColor(f, cv2.COLOR_BGR2RGB) for f in all_frames_bgr])
+
+    captions: List[dict] = []
+    start_idx = 0
+    while start_idx < total_frames:
+        end_idx = min(start_idx + chunk_size, total_frames)
+        chunk_frames = all_frames_rgb[start_idx:end_idx]
+        start_ms = int(start_idx / fps * 1000)
+        end_ms = int(end_idx / fps * 1000)
+
+        logger.info(f"Inference chunk: frames {start_idx}-{end_idx} ({start_ms}ms-{end_ms}ms)")
+        result = runtime.pipeline.predict_from_numpy_frames(chunk_frames)
+
+        text = result.get("text", "").strip()
+        confidence = int(round(float(result.get("confidence", 0.0)) * 100))
+
+        if text:
+            captions.append({
+                "start_ms": start_ms,
+                "end_ms": end_ms,
+                "text": text,
+                "confidence": confidence,
+            })
+
+        start_idx += stride
+
+    captions = _deduplicate_captions(captions)
+    processing_time_ms = int((time.time() - total_start) * 1000)
+
+    return {
+        "fps": round(fps, 2),
+        "total_duration_ms": total_duration_ms,
+        "processing_time_ms": processing_time_ms,
+        "frames": frame_data,
+        "captions": captions,
+    }
 
 
 if __name__ == "__main__":

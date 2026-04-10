@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LipSync — Live Test</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0b0e14;
+    --surface: #151a24;
+    --border: #1e2533;
+    --text: #e0e4ec;
+    --text-dim: #6b7a90;
+    --accent: #3b82f6;
+    --accent-glow: rgba(59, 130, 246, 0.25);
+    --green: #22c55e;
+    --yellow: #eab308;
+    --red: #ef4444;
+  }
+
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.25rem;
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    width: 100%;
+    max-width: 960px;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    flex-shrink: 0;
+  }
+
+  .status-dot.active { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-dot.error { background: var(--red); box-shadow: 0 0 6px var(--red); }
+
+  .video-container {
+    position: relative;
+    aspect-ratio: 4/3;
+    background: #000;
+  }
+
+  video, canvas { width: 100%; height: 100%; object-fit: cover; display: block; }
+  canvas#captureCanvas { display: none; }
+
+  .caption-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 1rem;
+    background: linear-gradient(transparent, rgba(0,0,0,0.85));
+    min-height: 4rem;
+    display: flex;
+    align-items: flex-end;
+  }
+
+  .caption-text {
+    font-size: 1.2rem;
+    font-weight: 600;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    line-height: 1.4;
+  }
+
+  .caption-text.placeholder { color: var(--text-dim); font-weight: 400; font-style: italic; font-size: 0.95rem; }
+
+  .controls {
+    padding: 1rem;
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  button {
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    padding: 0.6rem 1.2rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  #startBtn {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 0 0 0 var(--accent-glow);
+  }
+
+  #startBtn:hover { box-shadow: 0 0 16px var(--accent-glow); }
+  #startBtn:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
+
+  #stopBtn {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--red);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+
+  #stopBtn:hover { background: rgba(239, 68, 68, 0.25); }
+  #stopBtn:disabled { opacity: 0.3; cursor: default; }
+
+  .status-text {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+  }
+
+  .right-col { display: flex; flex-direction: column; gap: 1.25rem; }
+
+  .transcript-body {
+    padding: 1rem;
+    max-height: 220px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .transcript-body:empty::after {
+    content: "Captions will appear here when speech is detected.";
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    font-style: italic;
+  }
+
+  .transcript-entry {
+    padding: 0.5rem 0.65rem;
+    background: rgba(59, 130, 246, 0.06);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    animation: fadeIn 0.3s ease;
+  }
+
+  .transcript-entry .meta {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    margin-top: 0.2rem;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  .metrics-body {
+    padding: 1rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+  }
+
+  .metric {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .metric-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+  }
+
+  .metric-value {
+    font-size: 1.05rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .confidence-bar {
+    grid-column: 1 / -1;
+    margin-top: 0.25rem;
+  }
+
+  .confidence-bar .bar-track {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 0.35rem;
+  }
+
+  .confidence-bar .bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease, background 0.4s ease;
+    width: 0%;
+    background: var(--accent);
+  }
+
+  .log-body {
+    padding: 0.75rem 1rem;
+    font-size: 0.75rem;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    color: var(--text-dim);
+    max-height: 120px;
+    overflow-y: auto;
+    line-height: 1.6;
+  }
+
+  .log-body span { display: block; }
+  .log-body .err { color: var(--red); }
+  .log-body .ok { color: var(--green); }
+
+  @media (max-width: 700px) {
+    .main-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<h1>LipSync Live Test</h1>
+<p class="subtitle">Standalone frontend — connects to FastAPI backend on port 8000</p>
+
+<div class="main-grid">
+  <!-- Left column: video + controls -->
+  <div>
+    <div class="panel">
+      <div class="panel-header">
+        <span class="status-dot" id="cameraDot"></span>
+        Camera Feed
+      </div>
+      <div class="video-container">
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="captureCanvas"></canvas>
+        <div class="caption-overlay">
+          <div class="caption-text placeholder" id="captionDisplay">Press Start to begin</div>
+        </div>
+      </div>
+      <div class="controls">
+        <button id="startBtn">Start</button>
+        <button id="stopBtn" disabled>Stop</button>
+        <span class="status-text" id="statusText">Idle</span>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top: 1.25rem;">
+      <div class="panel-header">Log</div>
+      <div class="log-body" id="logBody"></div>
+    </div>
+  </div>
+
+  <!-- Right column: transcript + metrics -->
+  <div class="right-col">
+    <div class="panel" style="flex: 1;">
+      <div class="panel-header">Transcript</div>
+      <div class="transcript-body" id="transcriptBody"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">Metrics</div>
+      <div class="metrics-body">
+        <div class="metric">
+          <span class="metric-label">FPS</span>
+          <span class="metric-value" id="metricFps">—</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Total Latency</span>
+          <span class="metric-value" id="metricTotal">—</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Detection</span>
+          <span class="metric-value" id="metricDetect">—</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Inference</span>
+          <span class="metric-value" id="metricInfer">—</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Words</span>
+          <span class="metric-value" id="metricWords">0</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Face</span>
+          <span class="metric-value" id="metricFace">—</span>
+        </div>
+        <div class="confidence-bar">
+          <span class="metric-label">Confidence: <span id="confLabel">—</span></span>
+          <div class="bar-track"><div class="bar-fill" id="confFill"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "http://127.0.0.1:8000";
+const FRAME_INTERVAL_MS = 120;
+const JPEG_QUALITY = 0.7;
+
+const video = document.getElementById("video");
+const canvas = document.getElementById("captureCanvas");
+const ctx = canvas.getContext("2d");
+const startBtn = document.getElementById("startBtn");
+const stopBtn = document.getElementById("stopBtn");
+const statusText = document.getElementById("statusText");
+const cameraDot = document.getElementById("cameraDot");
+const captionDisplay = document.getElementById("captionDisplay");
+const transcriptBody = document.getElementById("transcriptBody");
+const logBody = document.getElementById("logBody");
+const confFill = document.getElementById("confFill");
+const confLabel = document.getElementById("confLabel");
+
+let sessionId = null;
+let frameLoop = null;
+let stream = null;
+let sending = false;
+
+function log(msg, cls) {
+  const el = document.createElement("span");
+  if (cls) el.className = cls;
+  el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  logBody.appendChild(el);
+  logBody.scrollTop = logBody.scrollHeight;
+}
+
+async function startCamera() {
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+    audio: false,
+  });
+  video.srcObject = stream;
+  await video.play();
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  cameraDot.classList.add("active");
+  log("Camera started", "ok");
+}
+
+function stopCamera() {
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+  video.srcObject = null;
+  cameraDot.classList.remove("active");
+}
+
+function captureFrame() {
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+}
+
+function updateMetrics(data) {
+  const m = data.metrics || {};
+  document.getElementById("metricFps").textContent = m.fps != null ? m.fps.toFixed(1) : "—";
+  document.getElementById("metricTotal").textContent = m.total_ms != null ? m.total_ms.toFixed(0) + " ms" : "—";
+  document.getElementById("metricDetect").textContent = m.detect_ms != null ? m.detect_ms.toFixed(0) + " ms" : "—";
+  document.getElementById("metricInfer").textContent = m.inference_ms != null ? m.inference_ms.toFixed(0) + " ms" : "—";
+  document.getElementById("metricWords").textContent = m.word_count ?? 0;
+  document.getElementById("metricFace").textContent = data.face_detected ? "Yes" : "No";
+
+  const conf = data.confidence ?? 0;
+  confLabel.textContent = `${conf}% (${data.confidence_label || "—"})`;
+  confFill.style.width = conf + "%";
+  confFill.style.background = conf >= 75 ? "var(--green)" : conf >= 45 ? "var(--yellow)" : "var(--red)";
+}
+
+function addTranscriptEntry(entry) {
+  const div = document.createElement("div");
+  div.className = "transcript-entry";
+  const time = new Date(entry.timestamp_ms).toLocaleTimeString();
+  div.innerHTML = `${entry.text}<div class="meta">${time} &middot; ${entry.confidence}% confidence</div>`;
+  transcriptBody.appendChild(div);
+  transcriptBody.scrollTop = transcriptBody.scrollHeight;
+}
+
+async function sendFrame() {
+  if (sending || !sessionId) return;
+  sending = true;
+  try {
+    const frameB64 = captureFrame();
+    const res = await fetch(`${API}/session/frame`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId, frame_b64: frameB64 }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      log(`Frame error: ${res.status} ${err}`, "err");
+      sending = false;
+      return;
+    }
+    const data = await res.json();
+    updateMetrics(data);
+
+    if (data.caption) {
+      captionDisplay.textContent = data.caption;
+      captionDisplay.classList.remove("placeholder");
+    } else {
+      captionDisplay.textContent = data.status || "Listening...";
+      captionDisplay.classList.add("placeholder");
+    }
+
+    statusText.textContent = data.status || "Processing";
+
+    if (data.transcript_entry) {
+      addTranscriptEntry(data.transcript_entry);
+    }
+  } catch (err) {
+    log(`Network error: ${err.message}`, "err");
+  }
+  sending = false;
+}
+
+startBtn.addEventListener("click", async () => {
+  startBtn.disabled = true;
+  statusText.textContent = "Starting...";
+  try {
+    log("Checking backend health...");
+    const hRes = await fetch(`${API}/health`);
+    const hData = await hRes.json();
+    log(`Backend OK — model_loaded: ${hData.model_loaded}`, "ok");
+
+    await startCamera();
+
+    log("Creating session...");
+    const sRes = await fetch(`${API}/session/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ infer_interval_seconds: 1.2, frame_window_seconds: 2.0, target_fps: 25 }),
+    });
+    const sData = await sRes.json();
+    sessionId = sData.session_id;
+    log(`Session created: ${sessionId.slice(0, 8)}...`, "ok");
+
+    statusText.textContent = "Running";
+    stopBtn.disabled = false;
+    frameLoop = setInterval(sendFrame, FRAME_INTERVAL_MS);
+  } catch (err) {
+    log(`Start failed: ${err.message}`, "err");
+    statusText.textContent = "Error";
+    cameraDot.classList.add("error");
+    startBtn.disabled = false;
+  }
+});
+
+stopBtn.addEventListener("click", async () => {
+  stopBtn.disabled = true;
+  if (frameLoop) { clearInterval(frameLoop); frameLoop = null; }
+  if (sessionId) {
+    try {
+      await fetch(`${API}/session/stop`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+      log("Session stopped", "ok");
+    } catch (_) {}
+    sessionId = null;
+  }
+  stopCamera();
+  statusText.textContent = "Idle";
+  captionDisplay.textContent = "Press Start to begin";
+  captionDisplay.classList.add("placeholder");
+  startBtn.disabled = false;
+  log("Stopped");
+});
+</script>
+</body>
+</html>

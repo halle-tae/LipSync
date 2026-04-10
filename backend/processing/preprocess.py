@@ -21,7 +21,7 @@ import torchvision
 
 # Ensure Auto-AVSR is on path so we can use the *exact* same VideoTransform
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-_AUTOAVSR_DIR = _PROJECT_ROOT / "auto_avsr"
+_AUTOAVSR_DIR = _PROJECT_ROOT / "auto_avsr" / "auto_avsr"
 if str(_AUTOAVSR_DIR) not in sys.path:
     sys.path.insert(0, str(_AUTOAVSR_DIR))
 
